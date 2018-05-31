@@ -9,7 +9,7 @@ spec:
   - args:
     - iperf3
     - -s
-    image: infrabuilder/netbench
+    image: infrabuilder/netbench:server-iperf3
     name: iperf-srv
   nodeSelector: 
     kubernetes.io/hostname: s02

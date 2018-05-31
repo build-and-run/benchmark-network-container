@@ -6,7 +6,7 @@ metadata:
   name: http-srv
 spec:
   containers:
-  - image: nginx
+  - image: infrabuilder/netbench:server-http
     name: httpd-srv
     volumeMounts:
     - name: data

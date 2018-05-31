@@ -6,7 +6,7 @@ metadata:
   name: ssh-srv
 spec:
   containers:
-  - image: rastasheep/ubuntu-sshd:18.04
+  - image: infrabuilder/netbench:server-ssh
     name: sshd-srv
     volumeMounts:
     - name: data

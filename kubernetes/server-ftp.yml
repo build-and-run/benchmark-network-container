@@ -6,7 +6,7 @@ metadata:
   name: ftp-srv
 spec:
   containers:
-  - image: metabrainz/docker-anon-ftp
+  - image: infrabuilder/netbench:server-ftp
     name: ftpd-srv
     env:
     - name: ANON_MAX_RATE
