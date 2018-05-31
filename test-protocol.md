@@ -1,38 +1,97 @@
 # Benchmarking network solutions
 
-## Test protocol
+## Environment
 
-### hardware 
+### Hardware 
 
-3 nodes :
-
+The lab is made of 3 Supermicro nodes, each is equipped with :
 - cpu : Intel Xeon E5-1630 v3 (4 cores 8 threads 3.7Ghz)
 - ram : 32Go RAM : 4 * 8 Go DDR 4 2133Mhz 
 - raid :  Raid hardware LSI Megaraid 9361-4i
 - storage : 4 * 240Go SSD Intel S3500 in RAID 0
 - network : 1 NIC Supermicro Dual port 10Gbit SFP+
-- ...
 
-Switch : Supermicro SSE-X3348SR 48 ports 10Gbit SFP+
+The lab switch is a **Supermicro SSE-X3348SR 48 ports 10Gbit SFP+**
 
-Kubernetes v1.10.3 via kubeadm (up to date on 2018-05-30)
+Nodes are connected to switch via 1 meter SFP+ Direct Attach Copper (DAC) cable.
 
-### Preparation commands
+```
++----------+  +----------+  +----------+
+|Server s02|  |Server s03|  |Server s04|
+| 10.1.1.2 |  | 10.1.1.3 |  | 10.1.1.4 |
++----------+  +----------+  +----------+
+     |             |              |     
+     |DAC          |DAC           |DAC  
+     |             |              |     
++--------------------------------------+
+|            Switch 10Gbit             |
++--------------------------------------+
+```
 
-Preparing nodes
-cat bench-prepare.sh | lssh 4
+### Software
 
-#### Test TCP
+#### Operating System 
+
+We will conduct this benchmark with Ubuntu 18.04 (last LTS at this time)
+
+Kernel version : `4.15.0-22-generic`
+
+#### Docker
+
+The Docker version we will use is the default one on Ubuntu 18.04 : 
+
+```
+Client:
+ Version:	17.12.1-ce
+ API version:	1.35
+ Go version:	go1.10.1
+ Git commit:	7390fc6
+ Built:	Wed Apr 18 01:23:11 2018
+ OS/Arch:	linux/amd64
+
+Server:
+ Engine:
+  Version:	17.12.1-ce
+  API version:	1.35 (minimum version 1.12)
+  Go version:	go1.10.1
+  Git commit:	7390fc6
+  Built:	Wed Feb 28 17:46:05 2018
+  OS/Arch:	linux/amd64
+  Experimental:	false
+```
+
+#### Kubernetes
+
+Kubernetes **v1.10.3** setup with **kubeadm**, node s04 will act as master node, s02 and s03 will act as minion.
+
+```
+Server Version: version.Info{Major:"1", Minor:"10", GitVersion:"v1.10.3", GitCommit:"2bba0127d85d5a46ab4b778548be28623b32d0b0", GitTreeState:"clean", BuildDate:"2018-05-21T09:05:37Z", GoVersion:"go1.9.3", Compiler:"gc", Platform:"linux/amd64"}
+```
+
+### Benchmark tools
+
+#### TCP benchmark with iperf3
 
 We will launch iperf3 in tcp mode (default), omitting the first bunch of packets (-O 1) to prevent the TCP Slow start and finally connection on the IP of the server (-c 10.1.1.2)
 
-```Bash
+```bash
 iperf3 -O 1 -c 10.1.1.2
 ```
 
+Output sample :
 
+```
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-10.00  sec  11.5 GBytes  9.86 Gbits/sec  259             sender
+[  5]   0.00-10.04  sec  11.5 GBytes  9.86 Gbits/sec                  receiver
 
-#### Test UDP
+iperf Done.
+```
+
+From the output, we will extract the **Bitrate** (9.86 Gbits/sec), and the TCP retransmits "**Retr**" (259).
+
+#### UDP benchmark with iperf3
 
 We will launch iperf3 in udp mode (-u), with unlimited bandwidth (-b 0), using a 2MB buffer (-w 2M), omitting the first bunch of packets (-O 1) and finally connection on the IP of the server (-c 10.1.1.2)
 
@@ -40,7 +99,7 @@ We will launch iperf3 in udp mode (-u), with unlimited bandwidth (-b 0), using a
 iperf3 -u -b 0 -w 2M -O 1 -c 10.1.1.2 
 ```
 
-output sample :
+Output sample :
 
 ```
 - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -51,9 +110,9 @@ output sample :
 iperf Done.
 ```
 
-From the output, we will extract the Bandwidth (9.92 Gbits/sec), the Jitter (0.006 ms) and the loss percentage (0.0074%).
+From the output, we will extract the **Bandwidth** (9.92 Gbits/sec), the **Jitter** (0.006 ms) and the **loss percentage** (0.0074%).
 
-#### Test HTTP
+#### HTTP benchmark with Nginx and curl
 
 The HTTP test command is a simple curl using HTTP request against a Nginx server without authentication.
 
@@ -69,9 +128,9 @@ Output sample
 100  9.7G  100  9.7G    0     0  1180M      0  0:00:08  0:00:08 --:--:-- 1180M
 ```
 
-From the output, we will extract only the average download speed (Avergage Dload)
+From the output, we will extract only the average download speed "**Avergage Dload**" (1180M) in MByte/scd
 
-#### Test FTP
+#### FTP benchmark with 
 
 The FTP test command is a simple curl using FTP request against a VSFTPD server in anonymous mode.
 
@@ -87,7 +146,7 @@ Output sample :
 100  9.7G  100  9.7G    0     0  1173M      0  0:00:08  0:00:08 --:--:-- 1180M
 ```
 
-From the output, we will extract only the average download speed in the column Avergage Dload (1173M)
+From the output, we will extract only the average download speed "**Avergage Dload**" (1173M) in MByte/s
 
 #### Test SCP
 
@@ -103,9 +162,7 @@ output sample :
 10G.dat                            100%   10GB 267.9MB/s   00:37
 ```
 
-From the output, we will extract the bandwidth (267.9MB/s)
-
-
+From the output, we will extract the **bandwidth** (267.9MB/s)
 
 ## Kubernetes 
 
@@ -133,19 +190,18 @@ lssh 2 wget http://10.1.1.101/10G.dat
 ### Setup of network overlays :
 
 ```bash
-
-
+# Calico with MTU 1500
+# Note : Calico lacks of auto MTU configuration , for jumbo frames (mtu 9000) see next config
+    kubeadm init --pod-network-cidr=192.168.0.0/16
+    kubectl apply -f kubernetes/network-calico.yaml
+    
 # Calico with MTU 9000
     kubeadm init --pod-network-cidr=192.168.0.0/16
     kubectl apply -f kubernetes/network-calico-mtu9000.yaml
-    # Note: must use custom iperf3 params -l 65500 -w 256K
 
 # Flannel
     kubeadm init --pod-network-cidr=10.244.0.0/16
     kubectl apply -f kubernetes/network-flannel.yaml
-    
-    
-
 ```
 
 
