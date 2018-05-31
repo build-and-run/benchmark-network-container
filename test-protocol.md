@@ -1,6 +1,6 @@
 # Benchmarking network solutions
 
-##  Test protocol
+## Test protocol
 
 ### hardware 
 
@@ -21,8 +21,6 @@ Kubernetes v1.10.3 via kubeadm (up to date on 2018-05-30)
 
 Preparing nodes
 cat bench-prepare.sh | lssh 4
-
-
 
 #### Test TCP
 
@@ -111,38 +109,60 @@ From the output, we will extract the bandwidth (267.9MB/s)
 
 ## Kubernetes 
 
+### Preparing Cluster
 
-
-```
-BINONLY=yes ./autokube-multi.sh ubuntu 10.1.1.4 10.1.1.2 10.1.1.3
-
-
+```bash
 16.04 mtu
 	lssh 2 "sudo sed -i 's/mtu 1500/mtu 9000/g' /etc/network/interfaces.d/50-cloud-init.cfg && sudo service networking restart"
 
-18.04 mtu
-	lssh 2 "sudo sed -i 's/mtu: 1500/mtu: 9000/' /etc/netplan/50-cloud-init.yaml && sudo netplan apply"
+18.04 mtu & dns
+	for i in 2 3 4; do lssh $i "sudo sed -i 's/mtu: 1500/mtu: 9000/' /etc/netplan/50-cloud-init.yaml && sudo netplan apply; sudo sed -i 's/nameserver .*/nameserver 8.8.8.8/' /etc/resolv.conf"; done
 
-18.04 DNS
-	lssh 2 "sudo sed -i 's/nameserver .*/nameserver 8.8.8.8/' /etc/resolv.conf"
+BINONLY=yes ./autokube-multi.sh ubuntu 10.1.1.4 10.1.1.2 10.1.1.3
 
-lssh 2 wget http://10.1.1.101/10G.dat
+# Network 
+lssh 4 sudo kubeadm init ...
+
 lssh 4 "sudo cp /etc/kubernetes/admin.conf ./ && sudo chmod +r admin.conf"
 qscp ubuntu@10.1.1.4:/home/ubuntu/admin.conf config
+lssh 2 wget http://10.1.1.101/10G.dat
 ```
 
-Test iperf3 :
+
+
+### Setup of network overlays :
+
+```bash
+
+
+# Calico with MTU 9000
+    kubeadm init --pod-network-cidr=192.168.0.0/16
+    kubectl apply -f kubernetes/network-calico-mtu9000.yaml
+    # Note: must use custom iperf3 params -l 65500 -w 256K
+
+# Flannel
+    kubeadm init --pod-network-cidr=10.244.0.0/16
+    kubectl apply -f kubernetes/network-flannel.yaml
+    
+    
+
+```
+
+
+### Benchmark commands
+
+#### Test iperf3 :
 
 ```bash
 # Creating HTTP Server Pod
-kubectl apply -f bench-iperfd.yml
+kubectl apply -f kubernetes/server-iperf3.yml
 
 # Waiting for pod to be alive
 while true; do kubectl get pod|grep iperf-srv |grep Running && break; sleep 1; done
 
 # Retrieving Pod IP address
 IP=$(kubectl get pod/iperf-srv -o jsonpath='{.status.podIP}')
-echo $IP
+echo Server iperf3 is listening on $IP
 
 # Launching benchmark for TCP
 kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"s03"}}}' -- iperf3 -c $IP -O 1 
@@ -151,76 +171,72 @@ kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client 
 kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"s03"}}}' -- iperf3 -u -b 0 -c $IP -O 1
 
 # Cleaning
-kubectl delete -f bench-iperfd.yml
+kubectl delete -f kubernetes/server-iperf3.yml
 ```
 
-
-
-Test HTTP :
+#### Test HTTP :
 
 ```bash
 # Creating HTTP Server Pod
-kubectl apply -f bench-httpd.yml
+kubectl apply -f kubernetes/server-http.yml
 
 # Waiting for pod to be alive
 while true; do kubectl get pod|grep http-srv |grep Running && break; sleep 1; done
 
 # Retrieving Pod IP address
 IP=$(kubectl get pod/http-srv -o jsonpath='{.status.podIP}')
-echo $IP
+echo Server HTTP is listening on $IP
 
 # Launching benchmark
 kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"s03"}}}' -- curl -o /dev/null http://$IP/10G.dat 
 
 # Cleaning
-kubectl delete -f bench-httpd.yml
+kubectl delete -f kubernetes/server-http.yml
 ```
 
-Test FTP :
+#### Test FTP :
 
 ```bash
 # Creating FTP Server Pod
-kubectl apply -f bench-ftpd.yml
+kubectl apply -f kubernetes/server-ftp.yml
 
 # Waiting for pod to be alive
 while true; do kubectl get pod|grep ftp-srv |grep Running && break; sleep 1; done
 
 # Retrieving Pod IP address
 IP=$(kubectl get pod/ftp-srv -o jsonpath='{.status.podIP}')
-echo $IP
+echo Server FTP is listening on $IP
 
 # Launching benchmark
 kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"s03"}}}' -- curl -o /dev/null ftp://$IP/10G.dat
 
 # Cleaning
-kubectl delete -f bench-ftpd.yml
+kubectl delete -f kubernetes/server-ftp.yml
 ```
 
- Test SCP :
+#### Test SCP :
 
 ```bash
 # Creating SSH Server Pod
-kubectl apply -f bench-sshd.yml
+kubectl apply -f kubernetes/server-ssh.yml
 
 # Waiting for pod to be alive
 while true; do kubectl get pod|grep ssh-srv |grep Running && break; sleep 1; done
 
 # Retrieving Pod IP address
 IP=$(kubectl get pod/ssh-srv -o jsonpath='{.status.podIP}')
-echo $IP
+echo Server SSH is listening on $IP
 
 # Launching benchmark
 kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"s03"}}}' -- scp root@$IP:/root/10G.dat ./
 
 # Cleaning
-kubectl delete -f bench-ftpd.yml
+kubectl delete -f kubernetes/server-ssh.yml
 
 scp -o 'Ciphers chacha20-poly1305@openssh.com' root@10.244.1.8:/root/10G.dat ./
 scp -o 'Ciphers aes128-str' root@10.244.1.8:/root/10G.dat ./
 scp -o 'Ciphers aes256-str' root@10.244.1.8:/root/10G.dat ./
 ```
-
-
 
 VSFTPD config :
 
