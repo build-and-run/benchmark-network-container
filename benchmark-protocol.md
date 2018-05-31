@@ -1,6 +1,8 @@
-# Benchmarking network solutions
+# Container Network Benchmark Protocol
 
 ## Goal
+
+
 
 ## Environment
 
@@ -185,9 +187,9 @@ Output sample
 100  9.7G  100  9.7G    0     0  1180M      0  0:00:08  0:00:08 --:--:-- 1180M
 ```
 
-From the output, we will extract only the average download speed "**Avergage Dload**" (1180M) in MByte/scd
+From the output, we will extract only the average download speed "**Average Dload**" (1180M) in MByte/scd
 
-#### FTP benchmark with vsftpd and curl 
+#### FTP benchmark with vsftpd and curl 
 
 On the server side, we will use a simple **vsftpd** with following configuration :
 
@@ -234,7 +236,7 @@ Output sample :
 100  9.7G  100  9.7G    0     0  1173M      0  0:00:08  0:00:08 --:--:-- 1180M
 ```
 
-From the output, we will extract only the average download speed "**Avergage Dload**" (1173M) in MByte/s
+From the output, we will extract only the average download speed "**Average Dload**" (1173M) in MByte/s
 
 #### SCP benchmark with OpenSSH server and client
 
@@ -304,7 +306,7 @@ Sequence diagram :
        drop all 3 nodes
 ```
 
-## Kubernetes 
+## Kubernetes 
 
 ### Preparing Cluster
 
@@ -410,7 +412,7 @@ kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client 
 kubectl delete -f kubernetes/server-ftp.yml
 ```
 
-#### Testing SCP
+#### Testing SCP
 
 ```bash
 # Creating SSH Server Pod
