@@ -1,5 +1,7 @@
 # Container Network Benchmark Protocol
 
+[TOC]
+
 ## Goal
 
 
@@ -150,9 +152,9 @@ iperf3 -s
 
 On the client side, we will launch iperf3 in udp mode (-u), with unlimited bandwidth (-b 0), using a 2MB buffer (-w 2M), omitting the first bunch of packets (-O 1) and finally connection on the IP of the server (-c 10.1.1.2)
 
-```Bash
+```bash
 # iperf3 UDP client command
-iperf3 -u -b 0 -O 1 -c 10.1.1.2 
+iperf3 -u -b 0 -O 1 -c 10.1.1.2 -w 256K
 ```
 
 Output sample :
@@ -193,7 +195,7 @@ From the output, we will extract only the average download speed "**Average Dloa
 
 On the server side, we will use a simple **vsftpd** with following configuration :
 
-```
+```ini
 listen=YES
 anonymous_enable=YES
 dirmessage_enable=YES
@@ -306,6 +308,30 @@ Sequence diagram :
        drop all 3 nodes
 ```
 
+
+
+## Test grid
+
+Here are the differents 
+
+## Docker Standalone
+
+
+
+## Docker Swarm
+
+### Preparing cluster
+
+Initializing master :
+
+```bash
+docker swarm init --advertise-addr 10.1.1.4
+```
+
+
+
+
+
 ## Kubernetes 
 
 ### Preparing Cluster
@@ -313,18 +339,19 @@ Sequence diagram :
 On Ubuntu 18.04, nodes 
 
 ```bash
-
-18.04 mtu & dns
-	for i in 2 3 4; do lssh $i "sudo sed -i 's/mtu: 1500/mtu: 9000/' /etc/netplan/50-cloud-init.yaml && sudo netplan apply; sudo sed -i 's/nameserver .*/nameserver 8.8.8.8/' /etc/resolv.conf"; done
+for i in 2 3 4; do lssh $i "sudo sed -i 's/mtu: 1500/mtu: 9000/' /etc/netplan/50-cloud-init.yaml && sudo netplan apply; sudo sed -i 's/nameserver .*/nameserver 8.8.8.8/' /etc/resolv.conf"; done
 
 BINONLY=yes ./autokube-multi.sh ubuntu 10.1.1.4 10.1.1.2 10.1.1.3
 
-# Network 
-lssh 4 sudo kubeadm init ...
+# kubeadm init ...
 
 lssh 4 "sudo cp /etc/kubernetes/admin.conf ./ && sudo chmod +r admin.conf"
 qscp ubuntu@10.1.1.4:/home/ubuntu/admin.conf config
 lssh 2 wget http://10.1.1.101/10G.dat
+
+# Choose network
+
+# bench
 ```
 
 
@@ -341,9 +368,30 @@ lssh 2 wget http://10.1.1.101/10G.dat
     kubeadm init --pod-network-cidr=192.168.0.0/16
     kubectl apply -f kubernetes/network-calico-mtu9000.yaml
 
+# Canal
+	kubeadm init --pod-network-cidr=10.244.0.0/16
+	kubectl apply -f kubernetes/network-canal.yml
+
 # Flannel
     kubeadm init --pod-network-cidr=10.244.0.0/16
     kubectl apply -f kubernetes/network-flannel.yaml
+    
+# Romana
+	kubeadm init
+	kubectl apply -f kubernetes/network-romana.yaml
+    
+# Kube-Router
+	kubeadm init --pod-network-cidr=10.244.0.0/16
+	kubectl apply -f kubernetes/network-kuberouter.yaml
+
+# Weave Net
+# Note : Weave Net lacks of auto MTU configuration , for jumbo frames (mtu 9000) see next config
+	kubeadm init
+	kubectl apply -f kubernetes/network-weavenet.yml
+	
+# Weave Net with MTU 8912
+	kubeadm init
+	kubectl apply -f kubernetes/network-weavenet-mtu8912.yml
 ```
 
 
@@ -366,7 +414,7 @@ echo Server iperf3 is listening on $IP
 kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"s03"}}}' -- iperf3 -c $IP -O 1 
 
 # Launching benchmark for UDP
-kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"s03"}}}' -- iperf3 -u -b 0 -c $IP -O 1
+kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"s03"}}}' -- iperf3 -u -b 0 -c $IP -O 1 -w 256K
 
 # Cleaning
 kubectl delete -f kubernetes/server-iperf3.yml
@@ -425,13 +473,24 @@ while true; do kubectl get pod|grep ssh-srv |grep Running && break; sleep 1; don
 IP=$(kubectl get pod/ssh-srv -o jsonpath='{.status.podIP}')
 echo Server SSH is listening on $IP
 
-# Launching benchmark
+# Launching benchmark (must enter "yes" and password "root" manually)
 kubectl run --restart=Never -it --rm bench --image=infrabuilder/netbench:client --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"s03"}}}' -- scp root@$IP:/root/10G.dat ./
 
 # Cleaning
 kubectl delete -f kubernetes/server-ssh.yml
-
-scp -o 'Ciphers chacha20-poly1305@openssh.com' root@10.244.1.8:/root/10G.dat ./
-scp -o 'Ciphers aes128-str' root@10.244.1.8:/root/10G.dat ./
-scp -o 'Ciphers aes256-str' root@10.244.1.8:/root/10G.dat ./
 ```
+
+## Authors
+
+This benchmark has been conducted by **Build and Run**, a French devops freelance group. 
+
+The protocol has been designed by **Alexis Ducastel**, **Ivan Beauté**, and **Frédéric Léger**.
+
+At the moment, the **Build and Run** group is composed of :
+
+- **Ivan Beauté** from **Fabrique IT**
+- **Alexis Ducastel** from **infraBuilder**
+- **Denis Garcia** from **Kiadra**
+- **Julie Kolarovic** from **Sainen**
+- **Frédéric Léger** from **webofmars**
+- **Rénald Koch** 
