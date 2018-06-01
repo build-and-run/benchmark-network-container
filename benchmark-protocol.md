@@ -362,11 +362,11 @@ lssh 2 wget http://10.1.1.101/10G.dat
 # Calico with MTU 1500
 # Note : Calico lacks of auto MTU configuration , for jumbo frames (mtu 9000) see next config
     kubeadm init --pod-network-cidr=192.168.0.0/16
-    kubectl apply -f kubernetes/network-calico.yaml
+    kubectl apply -f kubernetes/network-calico.yml
     
 # Calico with MTU 9000
     kubeadm init --pod-network-cidr=192.168.0.0/16
-    kubectl apply -f kubernetes/network-calico-mtu9000.yaml
+    kubectl apply -f kubernetes/network-calico-mtu9000.yml
 
 # Canal
 	kubeadm init --pod-network-cidr=10.244.0.0/16
@@ -392,6 +392,10 @@ lssh 2 wget http://10.1.1.101/10G.dat
 # Weave Net with MTU 8912
 	kubeadm init
 	kubectl apply -f kubernetes/network-weavenet-mtu8912.yml
+
+# Weave Net with MTU 8912 and encryption
+	kubeadm init
+	kubectl apply -f kubernetes/network-weavenet-mtu8912-encrypted.yml
 ```
 
 
