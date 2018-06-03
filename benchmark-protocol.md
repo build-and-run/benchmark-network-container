@@ -339,19 +339,39 @@ docker swarm init --advertise-addr 10.1.1.4
 On Ubuntu 18.04, nodes 
 
 ```bash
-for i in 2 3 4; do lssh $i "sudo sed -i 's/mtu: 1500/mtu: 9000/' /etc/netplan/50-cloud-init.yaml && sudo netplan apply; sudo sed -i 's/nameserver .*/nameserver 8.8.8.8/' /etc/resolv.conf"; done
+# Changing default MTU, and changing DNS
+./common/nodes-prepare.sh ubuntu 10.1.1.2 10.1.1.3 10.1.1.4
 
-BINONLY=yes ./autokube-multi.sh ubuntu 10.1.1.4 10.1.1.2 10.1.1.3
+# Preparing nodes for kubernetes deployment via kubeadm
+./kubernetes/nodes-prepare.sh ubuntu 10.1.1.2 10.1.1.3 10.1.1.4
 
-# kubeadm init ...
+# ACTION : Choose network overlay and adapt kubeadm init
+# ssh ubuntu@10.1.1.4 sudo kubeadm init [--pod-network-cidr=A.B.C.D/XX]
 
-lssh 4 "sudo cp /etc/kubernetes/admin.conf ./ && sudo chmod +r admin.conf"
-qscp ubuntu@10.1.1.4:/home/ubuntu/admin.conf config
+# ACTION : join nodes to cluster
+# sudo kubeadm join 10.1.1.4:6443 --token ...
+
+# Retrieve kubeconfig from master node
+ssh ubuntu@10.1.1.4 "sudo cat /etc/kubernetes/admin.conf" > config
+export KUBECONFIG="$(pwd)/config"
+
+# ACTION : Deploy network overlay
+# kubectl apply -f kubernetes/network-[chosenOverlay].yml
+
+# Download 10GB reference file in s02 ubuntu home directory (mounted by pods)
+ssh ubuntu@10.1.1.2 wget http://10.1.1.101/10G.dat
+
+# Waiting for nodes to be ready
+while True; do kubectl get nodes|grep NotReady || break;sleep 1; done
+
+# Start benchmarks
+./common/nodes-prepare.sh ubuntu 10.1.1.2 10.1.1.3 10.1.1.4
+./kubernetes/nodes-prepare.sh ubuntu 10.1.1.2 10.1.1.3 10.1.1.4
+lssh 4 sudo kubeadm init
+lssh 2 sudo kubeadm join
+lssh 4 "sudo cat /etc/kubernetes/admin.conf" > config
 lssh 2 wget http://10.1.1.101/10G.dat
-
-# Choose network
-
-# bench
+while True; do kubectl get nodes|grep NotReady || break;sleep 1; done
 ```
 
 
@@ -368,21 +388,22 @@ lssh 2 wget http://10.1.1.101/10G.dat
     kubeadm init --pod-network-cidr=192.168.0.0/16
     kubectl apply -f kubernetes/network-calico-mtu9000.yml
 
-# Canal
+# Canal MTU 1500
+# Note : Canal lacks of auto MTU configuration
 	kubeadm init --pod-network-cidr=10.244.0.0/16
 	kubectl apply -f kubernetes/network-canal.yml
-
+	
 # Flannel
     kubeadm init --pod-network-cidr=10.244.0.0/16
-    kubectl apply -f kubernetes/network-flannel.yaml
+    kubectl apply -f kubernetes/network-flannel.yml
     
 # Romana
 	kubeadm init
-	kubectl apply -f kubernetes/network-romana.yaml
+	kubectl apply -f kubernetes/network-romana.yml
     
 # Kube-Router
 	kubeadm init --pod-network-cidr=10.244.0.0/16
-	kubectl apply -f kubernetes/network-kuberouter.yaml
+	kubectl apply -f kubernetes/network-kuberouter.yml
 
 # Weave Net
 # Note : Weave Net lacks of auto MTU configuration , for jumbo frames (mtu 9000) see next config
